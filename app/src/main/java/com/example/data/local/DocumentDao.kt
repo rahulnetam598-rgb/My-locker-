@@ -34,4 +34,10 @@ interface DocumentDao {
 
     @Query("DELETE FROM documents WHERE id = :id")
     suspend fun deleteDocumentById(id: Long)
+
+    @Query("SELECT * FROM documents WHERE isSample = 1")
+    suspend fun getSampleDocuments(): List<DocumentEntity>
+
+    @Query("DELETE FROM documents WHERE isSample = 1")
+    suspend fun deleteSampleDocuments()
 }

@@ -95,6 +95,7 @@ fun LockerApp(viewModel: LockerViewModel) {
     if (uiState.isAddDialogOpen && uiState.pendingImportUri != null) {
         AddDocumentDialog(
             uri = uiState.pendingImportUri!!,
+            fileInfo = uiState.pendingFileInfo,
             onDismiss = { viewModel.dismissAddDialog() },
             onSave = { title, category, docNumber, notes ->
                 viewModel.confirmAddDocument(title, category, docNumber, notes)

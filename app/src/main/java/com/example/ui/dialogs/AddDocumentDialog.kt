@@ -19,6 +19,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -38,8 +40,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.repository.PickedFileInfo
 import com.example.model.DocumentCategory
 import com.example.ui.theme.LockerBlueLight
 import com.example.ui.theme.LockerBluePrimary
@@ -47,10 +51,11 @@ import com.example.ui.theme.LockerBluePrimary
 @Composable
 fun AddDocumentDialog(
     uri: Uri,
+    fileInfo: PickedFileInfo?,
     onDismiss: () -> Unit,
     onSave: (title: String, category: String, docNumber: String, notes: String) -> Unit
 ) {
-    var title by remember { mutableStateOf("") }
+    var title by remember { mutableStateOf(fileInfo?.defaultTitle ?: "") }
     var selectedCategory by remember { mutableStateOf("IDENTITY") }
     var docNumber by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
@@ -62,16 +67,16 @@ fun AddDocumentDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(10.dp))
                         .background(LockerBlueLight),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Description,
+                        imageVector = if (fileInfo?.isPdf == true) Icons.Default.PictureAsPdf else Icons.Default.Description,
                         contentDescription = null,
                         tint = LockerBluePrimary,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
                 Spacer(modifier = Modifier.width(10.dp))
@@ -87,8 +92,54 @@ fun AddDocumentDialog(
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
             ) {
+                // Picked File Summary Box
+                if (fileInfo != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFFF1F5F9))
+                            .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(10.dp))
+                            .padding(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(if (fileInfo.isPdf) Color(0xFFFEE2E2) else Color(0xFFE0F2FE)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (fileInfo.isPdf) Icons.Default.PictureAsPdf else Icons.Default.Image,
+                                    contentDescription = null,
+                                    tint = if (fileInfo.isPdf) Color(0xFFDC2626) else LockerBluePrimary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = fileInfo.fileName,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "${if (fileInfo.isPdf) "PDF Document" else "Image File"} • ${fileInfo.formattedSize}",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF64748B)
+                                    )
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
                 Text(
-                    text = "This file will be stored privately on your device's internal storage.",
+                    text = "This file will be copied and stored locally in MyLocker. No data is sent to external servers.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -189,7 +240,7 @@ fun AddDocumentDialog(
                     value = notes,
                     onValueChange = { notes = it },
                     label = { Text("Notes (Optional)") },
-                    placeholder = { Text("Add any remarks, expiry date, or details") },
+                    placeholder = { Text("Add remarks, expiry date, or issuer notes") },
                     maxLines = 3,
                     modifier = Modifier
                         .fillMaxWidth()

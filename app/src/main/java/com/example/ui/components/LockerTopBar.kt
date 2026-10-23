@@ -31,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -42,9 +41,11 @@ import com.example.ui.theme.LockerBluePrimary
 @Composable
 fun LockerTopBar(
     isLockActive: Boolean,
+    hasSamples: Boolean,
     onSecurityClicked: () -> Unit,
     onDisclaimerClicked: () -> Unit,
     onRestoreSamplesClicked: () -> Unit,
+    onClearSamplesClicked: () -> Unit,
     onLockNowClicked: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -147,6 +148,15 @@ fun LockerTopBar(
                         onSecurityClicked()
                     }
                 )
+                if (hasSamples) {
+                    DropdownMenuItem(
+                        text = { Text("Remove Sample Documents") },
+                        onClick = {
+                            menuExpanded = false
+                            onClearSamplesClicked()
+                        }
+                    )
+                }
                 DropdownMenuItem(
                     text = { Text("Restore Sample Documents") },
                     onClick = {

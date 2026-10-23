@@ -2,9 +2,12 @@ package com.example
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.example.data.repository.PickedFileInfo
 import com.example.model.DocumentCategory
+import com.example.ui.viewmodel.DocumentSortOrder
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -30,5 +33,36 @@ class ExampleRobolectricTest {
         assertEquals("Identity", identity.title)
         assertEquals("Education", education.title)
         assertEquals("Other", other.title)
+    }
+
+    @Test
+    fun `verify picked file info formatting and default title`() {
+        val pdfInfo = PickedFileInfo(
+            fileName = "college_degree_scan.pdf",
+            fileSize = 1048576L,
+            mimeType = "application/pdf",
+            defaultTitle = "College Degree Scan",
+            isPdf = true
+        )
+
+        assertEquals("1.00 MB", pdfInfo.formattedSize)
+        assertTrue(pdfInfo.isPdf)
+        assertEquals("College Degree Scan", pdfInfo.defaultTitle)
+
+        val imageInfo = PickedFileInfo(
+            fileName = "passport_photo.png",
+            fileSize = 51200L,
+            mimeType = "image/png",
+            defaultTitle = "Passport Photo",
+            isPdf = false
+        )
+        assertEquals("50.0 KB", imageInfo.formattedSize)
+        assertFalse(imageInfo.isPdf)
+    }
+
+    @Test
+    fun `verify sort orders available`() {
+        assertEquals(4, DocumentSortOrder.entries.size)
+        assertEquals("Newest First", DocumentSortOrder.DATE_DESC.displayName)
     }
 }

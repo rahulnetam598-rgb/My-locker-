@@ -8,6 +8,7 @@ import com.example.data.local.DocumentEntity
 import com.example.data.local.MyLockerDatabase
 import com.example.data.preferences.LockerSecurityManager
 import com.example.data.repository.DocumentRepository
+import com.example.data.repository.PickedFileInfo
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -16,24 +17,36 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+enum class DocumentSortOrder(val displayName: String) {
+    DATE_DESC("Newest First"),
+    DATE_ASC("Oldest First"),
+    TITLE_ASC("Name (A–Z)"),
+    SIZE_DESC("Largest First")
+}
+
 data class LockerUiState(
     val documents: List<DocumentEntity> = emptyList(),
     val filteredDocuments: List<DocumentEntity> = emptyList(),
     val searchQuery: String = "",
     val selectedCategoryFilter: String? = null, // null means All
+    val sortOrder: DocumentSortOrder = DocumentSortOrder.DATE_DESC,
+    val showSamplesOnly: Boolean? = null, // null: all, true: only samples, false: hide samples
     val totalCount: Int = 0,
     val identityCount: Int = 0,
     val educationCount: Int = 0,
     val otherCount: Int = 0,
+    val sampleCount: Int = 0,
     val totalStorageBytes: Long = 0,
     val previewDocument: DocumentEntity? = null,
     val documentToEdit: DocumentEntity? = null,
     val documentToDelete: DocumentEntity? = null,
     val pendingImportUri: Uri? = null,
+    val pendingFileInfo: PickedFileInfo? = null,
     val isAddDialogOpen: Boolean = false,
     val isSecurityDialogOpen: Boolean = false,
     val isDisclaimerDialogOpen: Boolean = false,
     val userNotification: String? = null,
+    val errorMessage: String? = null,
     val isLockActive: Boolean = false,
     val isAppUnlocked: Boolean = true,
     val pinInput: String = "",
@@ -43,7 +56,7 @@ data class LockerUiState(
 class LockerViewModel(application: Application) : AndroidViewModel(application) {
 
     private val database = MyLockerDatabase.getInstance(application)
-    private val repository = DocumentRepository(application, database.documentDao())
+    val repository = DocumentRepository(application, database.documentDao())
     val securityManager = LockerSecurityManager(application)
 
     private val _searchQuery = MutableStateFlow("")
@@ -51,6 +64,12 @@ class LockerViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _selectedCategoryFilter = MutableStateFlow<String?>(null)
     val selectedCategoryFilter = _selectedCategoryFilter.asStateFlow()
+
+    private val _sortOrder = MutableStateFlow(DocumentSortOrder.DATE_DESC)
+    val sortOrder = _sortOrder.asStateFlow()
+
+    private val _showSamplesOnly = MutableStateFlow<Boolean?>(null)
+    val showSamplesOnly = _showSamplesOnly.asStateFlow()
 
     private val _previewDocument = MutableStateFlow<DocumentEntity?>(null)
     val previewDocument = _previewDocument.asStateFlow()
@@ -64,6 +83,9 @@ class LockerViewModel(application: Application) : AndroidViewModel(application) 
     private val _pendingImportUri = MutableStateFlow<Uri?>(null)
     val pendingImportUri = _pendingImportUri.asStateFlow()
 
+    private val _pendingFileInfo = MutableStateFlow<PickedFileInfo?>(null)
+    val pendingFileInfo = _pendingFileInfo.asStateFlow()
+
     private val _isAddDialogOpen = MutableStateFlow(false)
     val isAddDialogOpen = _isAddDialogOpen.asStateFlow()
 
@@ -75,6 +97,9 @@ class LockerViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _userNotification = MutableStateFlow<String?>(null)
     val userNotification = _userNotification.asStateFlow()
+
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage = _errorMessage.asStateFlow()
 
     private val _pinInput = MutableStateFlow("")
     val pinInput = _pinInput.asStateFlow()
@@ -88,14 +113,18 @@ class LockerViewModel(application: Application) : AndroidViewModel(application) 
         repository.allDocuments,
         _searchQuery,
         _selectedCategoryFilter,
+        _sortOrder,
+        _showSamplesOnly,
         _previewDocument,
         _documentToEdit,
         _documentToDelete,
         _pendingImportUri,
+        _pendingFileInfo,
         _isAddDialogOpen,
         _isSecurityDialogOpen,
         _isDisclaimerDialogOpen,
         _userNotification,
+        _errorMessage,
         _isLockActiveState,
         securityManager.isUnlocked,
         _pinInput,
@@ -105,32 +134,49 @@ class LockerViewModel(application: Application) : AndroidViewModel(application) 
         val docs = args[0] as List<DocumentEntity>
         val query = args[1] as String
         val catFilter = args[2] as String?
-        val preview = args[3] as DocumentEntity?
-        val toEdit = args[4] as DocumentEntity?
-        val toDelete = args[5] as DocumentEntity?
-        val pendingUri = args[6] as Uri?
-        val addOpen = args[7] as Boolean
-        val secOpen = args[8] as Boolean
-        val discOpen = args[9] as Boolean
-        val notif = args[10] as String?
-        val lockActive = args[11] as Boolean
-        val unlocked = args[12] as Boolean
-        val pin = args[13] as String
-        val pinErr = args[14] as String?
+        val sort = args[3] as DocumentSortOrder
+        val sampleFilter = args[4] as Boolean?
+        val preview = args[5] as DocumentEntity?
+        val toEdit = args[6] as DocumentEntity?
+        val toDelete = args[7] as DocumentEntity?
+        val pendingUri = args[8] as Uri?
+        val fileInfo = args[9] as PickedFileInfo?
+        val addOpen = args[10] as Boolean
+        val secOpen = args[11] as Boolean
+        val discOpen = args[12] as Boolean
+        val notif = args[13] as String?
+        val errMsg = args[14] as String?
+        val lockActive = args[15] as Boolean
+        val unlocked = args[16] as Boolean
+        val pin = args[17] as String
+        val pinErr = args[18] as String?
 
-        val filtered = docs.filter { doc ->
+        var filtered = docs.filter { doc ->
             val matchesCategory = catFilter == null || doc.category.equals(catFilter, ignoreCase = true)
+            val matchesSamples = when (sampleFilter) {
+                true -> doc.isSample
+                false -> !doc.isSample
+                null -> true
+            }
             val matchesQuery = query.isBlank() ||
                 doc.title.contains(query, ignoreCase = true) ||
                 doc.documentNumber.contains(query, ignoreCase = true) ||
                 doc.notes.contains(query, ignoreCase = true) ||
                 doc.category.contains(query, ignoreCase = true)
-            matchesCategory && matchesQuery
+            matchesCategory && matchesSamples && matchesQuery
+        }
+
+        filtered = when (sort) {
+            DocumentSortOrder.DATE_DESC -> filtered.sortedByDescending { it.createdAt }
+            DocumentSortOrder.DATE_ASC -> filtered.sortedBy { it.createdAt }
+            DocumentSortOrder.TITLE_ASC -> filtered.sortedBy { it.title.lowercase() }
+            DocumentSortOrder.SIZE_DESC -> filtered.sortedByDescending { it.fileSize }
         }
 
         val idCount = docs.count { it.category.equals("IDENTITY", ignoreCase = true) }
         val eduCount = docs.count { it.category.equals("EDUCATION", ignoreCase = true) }
         val otherCount = docs.count { it.category.equals("OTHER", ignoreCase = true) }
+        val sampleDocsCount = docs.count { it.isSample }
         val totalBytes = docs.sumOf { it.fileSize }
 
         LockerUiState(
@@ -138,19 +184,24 @@ class LockerViewModel(application: Application) : AndroidViewModel(application) 
             filteredDocuments = filtered,
             searchQuery = query,
             selectedCategoryFilter = catFilter,
+            sortOrder = sort,
+            showSamplesOnly = sampleFilter,
             totalCount = docs.size,
             identityCount = idCount,
             educationCount = eduCount,
             otherCount = otherCount,
+            sampleCount = sampleDocsCount,
             totalStorageBytes = totalBytes,
             previewDocument = preview,
             documentToEdit = toEdit,
             documentToDelete = toDelete,
             pendingImportUri = pendingUri,
+            pendingFileInfo = fileInfo,
             isAddDialogOpen = addOpen,
             isSecurityDialogOpen = secOpen,
             isDisclaimerDialogOpen = discOpen,
             userNotification = notif,
+            errorMessage = errMsg,
             isLockActive = lockActive,
             isAppUnlocked = unlocked,
             pinInput = pin,
@@ -179,17 +230,27 @@ class LockerViewModel(application: Application) : AndroidViewModel(application) 
         _selectedCategoryFilter.value = category
     }
 
+    fun onSortOrderSelected(order: DocumentSortOrder) {
+        _sortOrder.value = order
+    }
+
+    fun onToggleSampleFilter(filter: Boolean?) {
+        _showSamplesOnly.value = filter
+    }
+
     fun onSelectDocumentForPreview(document: DocumentEntity?) {
         _previewDocument.value = document
     }
 
     fun onInitiateAddDocument(uri: Uri) {
         _pendingImportUri.value = uri
+        _pendingFileInfo.value = repository.inspectPickedFile(uri)
         _isAddDialogOpen.value = true
     }
 
     fun dismissAddDialog() {
         _pendingImportUri.value = null
+        _pendingFileInfo.value = null
         _isAddDialogOpen.value = false
     }
 
@@ -206,7 +267,7 @@ class LockerViewModel(application: Application) : AndroidViewModel(application) 
                 _userNotification.value = "Document '${it.title}' added to your locker."
                 dismissAddDialog()
             }.onFailure { err ->
-                _userNotification.value = "Failed to add document: ${err.message}"
+                _errorMessage.value = "Failed to add document: ${err.message}"
             }
         }
     }
@@ -236,7 +297,7 @@ class LockerViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 dismissEditDialog()
             }.onFailure { err ->
-                _userNotification.value = "Failed to update: ${err.message}"
+                _errorMessage.value = "Failed to update: ${err.message}"
             }
         }
     }
@@ -260,7 +321,7 @@ class LockerViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 dismissDeleteDialog()
             }.onFailure { err ->
-                _userNotification.value = "Failed to delete: ${err.message}"
+                _errorMessage.value = "Failed to delete: ${err.message}"
             }
         }
     }
@@ -269,6 +330,17 @@ class LockerViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             repository.restoreSampleDocuments()
             _userNotification.value = "Sample documents restored for testing."
+        }
+    }
+
+    fun clearSampleDocuments() {
+        viewModelScope.launch {
+            val result = repository.clearSampleDocuments()
+            result.onSuccess {
+                _userNotification.value = "Sample documents removed from locker."
+            }.onFailure { err ->
+                _errorMessage.value = "Error removing samples: ${err.message}"
+            }
         }
     }
 
@@ -290,6 +362,10 @@ class LockerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun clearNotification() {
         _userNotification.value = null
+    }
+
+    fun clearErrorMessage() {
+        _errorMessage.value = null
     }
 
     // App Lock Methods
