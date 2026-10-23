@@ -1,0 +1,6 @@
+{
+  "name": "MyLocker",
+  "description": "Personal digital document organizer and local document wallet for identity, education, and other files.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

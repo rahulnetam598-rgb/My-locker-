@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">MyLocker</string>
+    <string name="category_identity">Identity</string>
+    <string name="category_education">Education</string>
+    <string name="category_other">Other</string>
+    <string name="app_disclaimer">Personal Digital Document Organizer. All files are saved locally on your device. Not connected to any government database or official authority.</string>
+</resources>
